@@ -1,0 +1,6 @@
+{
+  "name": "bankingBuddy",
+  "description": "Local-first, privacy-respecting financial tracking web and Android WebView application with CSV sanitization, local rule caching, and moving-average analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,91 @@
+name: bankingBuddy Web & Android APK CI/CD
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository (Full History for Version Counting)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle 9.3.1 (No Wrapper)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Install Web Dependencies & Run Unit Tests
+        working-directory: ./web
+        run: |
+          npm install
+          npm test
+          npm run build
+
+      - name: Bundle Web Dist Assets into Android WebView Assets
+        run: |
+          mkdir -p app/src/main/assets/web
+          cp -r web/dist/* app/src/main/assets/web/
+          test -f app/src/main/assets/web/index.html
+
+      - name: Generate Debug Keystore if Missing
+        working-directory: ./app
+        run: |
+          if [ ! -f debug.keystore ]; then
+            keytool -genkey -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Android Debug APK (Direct Gradle, No Daemon)
+        run: |
+          export VERSION_CODE=$(git rev-list --count HEAD)
+          gradle assembleDebug --no-daemon
+
+      - name: Upload Web Dist Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bankingBuddy-web-dist
+          path: web/dist/
+
+      - name: Upload Android Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bankingBuddy-android-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Deploy Web App to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./web/dist
